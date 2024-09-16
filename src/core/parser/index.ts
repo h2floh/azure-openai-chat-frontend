@@ -1,5 +1,8 @@
 import { ChatResponseError, newListWithEntryAtIndex } from '../../utils/index.js';
 import { createReader, readStream } from '../stream/index.js';
+import * as showdown from 'showdown';
+
+const converter = new showdown.Converter();
 
 export async function parseStreamedMessages({
   chatEntry,
@@ -30,30 +33,39 @@ export async function parseStreamedMessages({
   let updatedEntry = {
     ...chatEntry,
   };
-
+  console.log('parseStreamedMessages');
   for await (const chunk of chunks) {
+    // console.log('Chunk retrieved');
     if (signal.aborted) {
+      // console.log('Aborted');
       onCancel();
       return;
     }
 
+    // console.log('Before Error');
     if (chunk.error) {
+      // console.log('Error');
       throw new ChatResponseError(chunk.message, chunk.statusCode);
     }
 
+    // console.log('Before Content Filter');
     // content is filtered during the output streaming
     // https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/content-filter?tabs=javascrit
-    if (chunk.choices[0].finish_reason === 'content_filter') {
+    if (chunk.choices && chunk.choices[0].finish_reason === 'content_filter') {
       throw new ChatResponseError('Content filtered', 400);
     }
 
-    const { content, context } = chunk.choices[0].delta;
+    // console.log('Retrieve Delta');
+    const { content, context } = (chunk as BotResponseChunk).delta;
+    // console.log('Delta retrieved');
     if (context?.data_points) {
+      // console.log('getting data_points and skip');
       updatedEntry.dataPoints = context.data_points ?? [];
       updatedEntry.thoughts = context.thoughts ?? '';
 
       continue;
     }
+    // console.log('Processing Chunk...');
     let chunkValue = content ?? '';
 
     if (chunkValue === '') {
@@ -62,103 +74,105 @@ export async function parseStreamedMessages({
 
     streamedMessageRaw.push(chunkValue);
 
-    // we use numeric values to identify the beginning of a step
-    // if we match a number, store it in the buffer and move on to the next iteration
-    const LIST_ITEM_NUMBER: RegExp = /(\d+)/;
-    let matchedStepIndex = chunkValue.match(LIST_ITEM_NUMBER)?.[0];
-    if (matchedStepIndex) {
-      stepsBuffer.push(matchedStepIndex);
-      continue;
-    }
+    // // we use numeric values to identify the beginning of a step
+    // // if we match a number, store it in the buffer and move on to the next iteration
+    // const LIST_ITEM_NUMBER: RegExp = /(\d+)/;
+    // let matchedStepIndex = chunkValue.match(LIST_ITEM_NUMBER)?.[0];
+    // if (matchedStepIndex) {
+    //   stepsBuffer.push(matchedStepIndex);
+    //   continue;
+    // }
 
-    // followup questions are marked either with the word 'Next Questions:' or '<<text>>' or both at the same time
-    // these markers may be split across multiple chunks, so we need to buffer them!
-    // TODO: remove all this logic from the frontend and implement a solution on the backend or with TypeChat
-    // we start by creating a buffer when we match the first marker
-    const matchedFollowupQuestionMarker =
-      (!isFollowupQuestion && chunkValue.includes('Next')) || chunkValue.includes('<<');
-    // once we do, we can assume that we are processing a followup question and set the flag to true
-    if (matchedFollowupQuestionMarker) {
-      isFollowupQuestion = true;
-      followupQuestionsBuffer.push(chunkValue);
-      continue;
-    } else if (followupQuestionsBuffer.length > 0 && chunkValue.includes('Question')) {
-      isFollowupQuestion = true;
-      followupQuestionsBuffer.push(chunkValue);
-      continue;
-      // if we're already processing questions, we don't need to check for the marker again
-      // but we need to check if we reached the end of the followup questions
-    } else if (chunkValue.includes('<<') && isFollowupQuestion) {
-      isFollowupQuestion = true;
-      continue;
-      // this updates the index, so we add each question to a different array entry
-      // to simplify styling
-    } else if (chunkValue.includes('>\n')) {
-      followUpQuestionIndex = followUpQuestionIndex + 1;
-      isFollowupQuestion = true;
-      continue;
-      // additional returns need to be removed, but only after we have processed the whole set of chunks
-    } else if (isFollowupQuestion) {
-      isFollowupQuestion = true;
-      chunkValue = chunkValue.replace(/:?\n/, '').replaceAll('>', ''); // remove all returns and markers
-    }
+    // // followup questions are marked either with the word 'Next Questions:' or '<<text>>' or both at the same time
+    // // these markers may be split across multiple chunks, so we need to buffer them!
+    // // TODO: remove all this logic from the frontend and implement a solution on the backend or with TypeChat
+    // // we start by creating a buffer when we match the first marker
+    // const matchedFollowupQuestionMarker =
+    //   (!isFollowupQuestion && chunkValue.includes('Next')) || chunkValue.includes('<<');
+    // // once we do, we can assume that we are processing a followup question and set the flag to true
+    // if (matchedFollowupQuestionMarker) {
+    //   isFollowupQuestion = true;
+    //   followupQuestionsBuffer.push(chunkValue);
+    //   continue;
+    // } else if (followupQuestionsBuffer.length > 0 && chunkValue.includes('Question')) {
+    //   isFollowupQuestion = true;
+    //   followupQuestionsBuffer.push(chunkValue);
+    //   continue;
+    //   // if we're already processing questions, we don't need to check for the marker again
+    //   // but we need to check if we reached the end of the followup questions
+    // } else if (chunkValue.includes('<<') && isFollowupQuestion) {
+    //   isFollowupQuestion = true;
+    //   continue;
+    //   // this updates the index, so we add each question to a different array entry
+    //   // to simplify styling
+    // } else if (chunkValue.includes('>\n')) {
+    //   followUpQuestionIndex = followUpQuestionIndex + 1;
+    //   isFollowupQuestion = true;
+    //   continue;
+    //   // additional returns need to be removed, but only after we have processed the whole set of chunks
+    // } else if (isFollowupQuestion) {
+    //   isFollowupQuestion = true;
+    //   chunkValue = chunkValue.replace(/:?\n/, '').replaceAll('>', ''); // remove all returns and markers
+    // }
 
-    // if we are here, it means we have previously matched a number, followed by a dot (in current chunk)
-    // we can assume that we are at the beginning of a step!
-    if (stepsBuffer.length > 0 && chunkValue.includes('.')) {
-      isProcessingStep = true;
-      matchedStepIndex = stepsBuffer[0];
+    // // if we are here, it means we have previously matched a number, followed by a dot (in current chunk)
+    // // we can assume that we are at the beginning of a step!
+    // if (stepsBuffer.length > 0 && chunkValue.includes('.')) {
+    //   isProcessingStep = true;
+    //   matchedStepIndex = stepsBuffer[0];
 
-      // we don't need the current buffer anymore
-      stepsBuffer.length = 0;
-    } else if (chunkValue.includes('\n\n')) {
-      // if we are here, it means we may have reached the end of the last step
-      // in order to eliminate false positives, we need to check if we currently
-      // have a step in progress
+    //   // we don't need the current buffer anymore
+    //   stepsBuffer.length = 0;
+    // } else if (chunkValue.includes('\n\n')) {
+    //   // if we are here, it means we may have reached the end of the last step
+    //   // in order to eliminate false positives, we need to check if we currently
+    //   // have a step in progress
 
-      // eslint-disable-next-line unicorn/no-lonely-if
-      if (isProcessingStep) {
-        // mark the next iteration as the last step
-        // so that all remaining text (in current chunk) is added to the last step
-        isLastStep = true;
-      }
-    }
+    //   // eslint-disable-next-line unicorn/no-lonely-if
+    //   if (isProcessingStep) {
+    //     // mark the next iteration as the last step
+    //     // so that all remaining text (in current chunk) is added to the last step
+    //     isLastStep = true;
+    //   }
+    // }
 
-    // if we are at the beginning of a step, we need to remove the step number and dot from the chunk value
-    // we simply clear the current chunk value
+    // // if we are at the beginning of a step, we need to remove the step number and dot from the chunk value
+    // // we simply clear the current chunk value
 
-    if (matchedStepIndex || isProcessingStep || isFollowupQuestion) {
-      if (matchedStepIndex) {
-        chunkValue = '';
-      }
-      // set the step index that is needed to update the correct step entry
-      stepIndex = matchedStepIndex ? Number(matchedStepIndex) - 1 : stepIndex;
+    // if (matchedStepIndex || isProcessingStep || isFollowupQuestion) {
+    //   if (matchedStepIndex) {
+    //     chunkValue = '';
+    //   }
+    //   // set the step index that is needed to update the correct step entry
+    //   stepIndex = matchedStepIndex ? Number(matchedStepIndex) - 1 : stepIndex;
 
-      updatedEntry = updateFollowingStepOrFollowupQuestionEntry({
-        chunkValue,
-        textBlockIndex,
-        stepIndex,
-        isFollowupQuestion,
-        followUpQuestionIndex,
-        chatEntry: updatedEntry,
-      });
+    //   updatedEntry = updateFollowingStepOrFollowupQuestionEntry({
+    //     chunkValue,
+    //     textBlockIndex,
+    //     stepIndex,
+    //     isFollowupQuestion,
+    //     followUpQuestionIndex,
+    //     chatEntry: updatedEntry,
+    //   });
 
-      if (isLastStep) {
-        // we reached the end of the last step. Reset all flags and counters
-        isProcessingStep = false;
-        isLastStep = false;
-        isFollowupQuestion = false;
-        stepIndex = 0;
+    //   if (isLastStep) {
+    //     // we reached the end of the last step. Reset all flags and counters
+    //     isProcessingStep = false;
+    //     isLastStep = false;
+    //     isFollowupQuestion = false;
+    //     stepIndex = 0;
 
-        // when we reach the end of a series of steps, we have to increment the text block index
-        // so that we start process the next text block
-        textBlockIndex++;
-      }
-    } else {
-      updatedEntry = updateTextEntry({ chunkValue, textBlockIndex, chatEntry: updatedEntry });
-    }
-    const citations = parseCitations(streamedMessageRaw.join(''));
-    updatedEntry = updateCitationsEntry({ citations, chatEntry: updatedEntry });
+    //     // when we reach the end of a series of steps, we have to increment the text block index
+    //     // so that we start process the next text block
+    //     textBlockIndex++;
+    //   }
+    // } else {
+    //   updatedEntry = updateTextEntry({ chunkValue, textBlockIndex, chatEntry: updatedEntry });
+    // }
+
+    updatedEntry = updateTextEntry({ chunkValue, textBlockIndex, chatEntry: updatedEntry, rawMessage: streamedMessageRaw.join('')});
+    // const citations = parseCitations(streamedMessageRaw.join(''));
+    // updatedEntry = updateCitationsEntry({ citations, chatEntry: updatedEntry });
 
     onVisit(updatedEntry);
   }
@@ -225,10 +239,12 @@ export function updateTextEntry({
   chunkValue,
   textBlockIndex,
   chatEntry,
+  rawMessage,
 }: {
   chunkValue: string;
   textBlockIndex: number;
   chatEntry: ChatThreadEntry;
+  rawMessage: string;
 }): ChatThreadEntry {
   const { text: lastChatMessageTextEntry } = chatEntry;
   const block = lastChatMessageTextEntry[textBlockIndex] ?? {
@@ -236,7 +252,8 @@ export function updateTextEntry({
     followingSteps: [],
   };
 
-  const value = (block.value || '') + chunkValue;
+  
+  const value = converter.makeHtml(rawMessage); //(block.value || '') + chunkValue; //;
 
   return {
     ...chatEntry,
@@ -288,4 +305,10 @@ export function updateFollowingStepOrFollowupQuestionEntry({
   }
 
   return chatEntry;
+}
+
+function convertToHtml(input: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(input, 'text/html');
+  return doc.body.innerHTML;
 }

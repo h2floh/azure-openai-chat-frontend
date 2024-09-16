@@ -153,7 +153,7 @@ export class ChatController implements ReactiveController {
 
         // for chat messages, process user question as a chat entry
         if (requestOptions.type === 'chat') {
-          await this.processResponse(question, true, false);
+          await this.processResponse(question, true, true);//httpOptions.stream);
         }
 
         this.isAwaitingResponse = true;
@@ -162,7 +162,7 @@ export class ChatController implements ReactiveController {
         const response = (await getAPIResponse(requestOptions, httpOptions)) as BotResponse;
         this.isAwaitingResponse = false;
 
-        await this.processResponse(response, false, httpOptions.stream);
+        await this.processResponse(response, false, true);//httpOptions.stream);
       } catch (error_: any) {
         const error = error_ as ChatResponseError;
         const chatError = {
@@ -171,7 +171,7 @@ export class ChatController implements ReactiveController {
 
         if (!this.processingMessage) {
           // add a empty message to the chat thread to display the error
-          await this.processResponse('', false, false);
+          await this.processResponse('', false, true);//httpOptions.stream);
         }
 
         if (this.processingMessage) {

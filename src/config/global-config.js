@@ -78,7 +78,7 @@ const requestOptions = {
 
 const chatHttpOptions = {
   // API URL for development purposes
-  url: 'http://localhost:3000',
+  url: 'https://skp-2ylugsdmv6t2g.proudplant-b4f59ce7.swedencentral.azurecontainerapps.io/stream',
   method: 'POST',
   stream: true,
 };

@@ -4,10 +4,11 @@ export async function callHttpApi(
   { question, type, approach, overrides, messages }: ChatRequestOptions,
   { method, url, stream, signal }: ChatHttpOptions,
 ) {
-  return await fetch(`${url}/${type}`, {
+  return await fetch(`${url}`, {
     method: method,
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer `,
     },
     signal,
     body: JSON.stringify({
@@ -22,7 +23,7 @@ export async function callHttpApi(
         ...overrides,
         approach,
       },
-      stream: type === 'chat' ? stream : false,
+      stream: true, //type === 'chat' ? stream : false,
     }),
   });
 }
@@ -34,7 +35,7 @@ export async function getAPIResponse(
   const response = await callHttpApi(requestOptions, httpOptions);
 
   // TODO: we should just use the value from httpOptions.stream
-  const streamResponse = requestOptions.type === 'ask' ? false : httpOptions.stream;
+  const streamResponse = true; //requestOptions.type === 'ask' ? false : httpOptions.stream;
   if (streamResponse) {
     return response;
   }
