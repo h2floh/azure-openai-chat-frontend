@@ -1,3 +1,4 @@
+import { accessToken } from '../../index.js';
 import { ChatResponseError } from '../../utils/index.js';
 
 export async function callHttpApi(
@@ -8,7 +9,7 @@ export async function callHttpApi(
     method: method,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer `,
+      'Authorization': `Bearer ${accessToken}`,
     },
     signal,
     body: JSON.stringify({

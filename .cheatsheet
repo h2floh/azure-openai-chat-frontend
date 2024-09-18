@@ -3,3 +3,7 @@ echo $AZURE_TOKEN
 export BACKEND_URI=https://skp-2ylugsdmv6t2g.proudplant-b4f59ce7.swedencentral.azurecontainerapps.io/stream
 
 npm start
+
+
+
+https://login.microsoftonline.com/ed7e92da-c902-4646-82b7-81cfa187d25e/oauth2/v2.0/authorize?client_id=fed608d3-fecf-4079-bd48-6f1302ea1ac5&response_type=token&redirect_uri=http%3A%2F%2Flocalhost:8000&response_mode=fragment&scope=api%3A%2F%2Ffed608d3-fecf-4079-bd48-6f1302ea1ac5%2Fapi
